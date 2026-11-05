@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NUTRIMIND - AI Menstrual Healthcare for Guardians</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js CDN for robust dynamic graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Leaflet CSS & JS for Interactive Map Ranging -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        cream: '#FDFBF7',
+                        sage: '#D8E2DC',
+                        lavender: '#E6E6FA',
+                        duskBlue: '#E2EAF4',
+                        softPink: '#F7EDE2',
+                        mutedText: '#4A5568',
+                        cardBg: '#FFFFFF',
+                        accentGreen: '#84A98C',
+                        accentPurple: '#9D8189'
+                    },
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                        accessible: ['"Atkinson Hyperlegible"', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #FDFBF7;
+            color: #2D3748;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .font-accessible-mode {
+            font-family: 'Atkinson Hyperlegible', sans-serif !important;
+            letter-spacing: 0.02em;
+            line-height: 1.6;
+        }
+        .touch-target {
+            min-height: 48px;
+            min-width: 48px;
+        }
+        @keyframes soft-pulse {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.08); opacity: 1; }
+        }
+        .animate-soft-pulse {
+            animation: soft-pulse 2.5s infinite ease-in-out;
+        }
+        #leafletMap {
+            height: 240px;
+            width: 100%;
+            border-radius: 1rem;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body id="appBody" class="h-full flex flex-col justify-between max-w-md mx-auto shadow-2xl overflow-x-hidden relative border-x border-duskBlue/30">
+
+    <!-- Custom Modal Notification Box -->
+    <div id="customModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-cardBg rounded-3xl p-6 max-w-sm w-full shadow-xl border border-duskBlue/50 text-center space-y-4">
+            <div id="modalIcon" class="w-14 h-14 bg-duskBlue/50 rounded-full flex items-center justify-center mx-auto text-blue-900">
+                <i data-lucide="bell-ring" class="w-7 h-7"></i>
+            </div>
+            <h3 id="modalTitle" class="text-xl font-bold text-gray-800">Notification</h3>
+            <p id="modalMessage" class="text-gray-600 text-sm leading-relaxed">Message goes here...</p>
+            <button onclick="closeModal()" class="w-full py-3 bg-slate-800 text-white font-semibold rounded-2xl hover:bg-slate-700 transition touch-target">Got it</button>
+        </div>
+    </div>
+
+    <!-- ONBOARDING FLOW MODAL / SCREEN -->
+    <div id="onboardingScreen" class="fixed inset-0 bg-cream z-40 flex flex-col p-6 overflow-y-auto">
+        <div class="my-auto max-w-sm w-full mx-auto space-y-6">
+            <div class="text-center space-y-2">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-lavender/60 rounded-3xl text-purple-900 mb-2">
+                    <i data-lucide="brain-circuit" class="w-8 h-8"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-900">NUTRIMIND</h1>
+                <p class="text-sm text-gray-600">AI Menstrual Healthcare & Biometric Hub for Guardians</p>
+            </div>
+
+            <!-- Onboarding Step Container -->
+            <div class="bg-white rounded-3xl p-6 shadow-sm border border-duskBlue/40 space-y-5">
+                
+                <!-- Step 1: Bluetooth & Smart Band Sync -->
+                <div id="step1" class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-wider text-purple-700 bg-lavender/50 px-3 py-1 rounded-full">Step 1 of 3</span>
+                        <span class="text-xs text-gray-400">Device Pairing</span>
+                    </div>
+                    <h2 class="text-lg font-bold text-gray-800">Connect Smart Band via BLE</h2>
+                    <p class="text-xs text-gray-500 leading-relaxed">Ensure your child's band is nearby for initial pairing. Cellular LoRaWAN fallback will activate automatically.</p>
+                    
+                    <div id="pairingBox" class="border-2 border-dashed border-duskBlue rounded-2xl p-6 text-center space-y-3 bg-duskBlue/10">
+                        <div id="pairingSpinner" class="w-10 h-10 border-4 border-slate-700 border-t-transparent rounded-full animate-spin mx-auto hidden"></div>
+                        <i data-lucide="bluetooth" id="bluetoothIcon" class="w-8 h-8 text-blue-600 mx-auto"></i>
+                        <p id="pairingStatusText" class="text-sm font-medium text-gray-700">Ready to scan for NutriBand Pro</p>
+                    </div>
+
+                    <button onclick="simulateBluetoothPairing()" id="pairBtn" class="w-full py-3.5 bg-slate-800 text-white font-semibold rounded-2xl hover:bg-slate-700 transition flex items-center justify-center gap-2 touch-target">
+                        <i data-lucide="radio" class="w-5 h-5"></i> Scan & Pair Band
+                    </button>
+                </div>
+
+                <!-- Step 2: Child Profile Details -->
+                <div id="step2" class="space-y-4 hidden">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-wider text-sage px-3 py-1 rounded-full text-slate-700 bg-sage/60">Step 2 of 3</span>
+                        <span class="text-xs text-gray-400">Profile Details</span>
+                    </div>
+                    <h2 class="text-lg font-bold text-gray-800">Child's Medical Profile</h2>
+                    
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">Child's Name / Identifier</label>
+                            <input type="text" id="childNameInput" value="Maya" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none focus:border-slate-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-600 mb-1">Age</label>
+                                <input type="number" id="childAgeInput" value="14" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-600 mb-1">Blood Group</label>
+                                <select id="bloodGroupInput" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none">
+                                    <option value="A+">A Positive (A+)</option>
+                                    <option value="A-">A Negative (A-)</option>
+                                    <option value="B+">B Positive (B+)</option>
+                                    <option value="B-">B Negative (B-)</option>
+                                    <option value="O+" selected>O Positive (O+)</option>
+                                    <option value="O-">O Negative (O-)</option>
+                                    <option value="AB+">AB Positive (AB+)</option>
+                                    <option value="AB-">AB Negative (AB-)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button onclick="goToStep(3)" class="w-full py-3.5 bg-slate-800 text-white font-semibold rounded-2xl hover:bg-slate-700 transition flex items-center justify-center gap-2 touch-target">
+                        Continue to Location Setup <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <!-- Step 3: Location & School Setup (UAE Context) -->
+                <div id="step3" class="space-y-4 hidden">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-wider text-blue-900 bg-duskBlue px-3 py-1 rounded-full">Step 3 of 3</span>
+                        <span class="text-xs text-gray-400">UAE Location Setup</span>
+                    </div>
+                    <h2 class="text-lg font-bold text-gray-800">Geofencing & Locations</h2>
+                    
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">Home Emirate / City</label>
+                            <select id="homeCity" onchange="updateNeighborhoods()" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none">
+                                <option value="Ajman" selected>Ajman</option>
+                                <option value="Sharjah">Sharjah</option>
+                                <option value="Dubai">Dubai</option>
+                                <option value="Abu Dhabi">Abu Dhabi</option>
+                                <option value="Ras Al Khaimah">Ras Al Khaimah</option>
+                                <option value="Fujairah">Fujairah</option>
+                                <option value="Umm Al Quwain">Umm Al Quwain</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">Neighborhood / District</label>
+                            <select id="homeNeighborhood" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none">
+                                <option value="Al Jurf" selected>Al Jurf</option>
+                                <option value="Al Nuaimia">Al Nuaimia</option>
+                                <option value="Al Rashidiya">Al Rashidiya</option>
+                                <option value="Al Rawda">Al Rawda</option>
+                                <option value="Al Mowaihat">Al Mowaihat</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-600 mb-1">Child's School (UAE Directory)</label>
+                            <select id="schoolSelect" class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm focus:outline-none">
+                                <option value="Habitat School Ajman" selected>Habitat School Ajman</option>
+                                <option value="International Indian School Ajman">International Indian School Ajman</option>
+                                <option value="Delhi Private School Sharjah">Delhi Private School Sharjah</option>
+                                <option value="The Westminster School Dubai">The Westminster School Dubai</option>
+                                <option value="GEMS Our Own English High School Sharjah">GEMS Our Own English High School Sharjah</option>
+                                <option value="City School Ajman">City School Ajman</option>
+                                <option value="Apple International School Dubai">Apple International School Dubai</option>
+                                <option value="Custom / Other School">Custom / Other School</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button onclick="completeOnboarding()" class="w-full py-3.5 bg-emerald-700 text-white font-semibold rounded-2xl hover:bg-emerald-600 transition flex items-center justify-center gap-2 touch-target shadow-md">
+                        <i data-lucide="check-circle-2" class="w-5 h-5"></i> Launch NutriMind App
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN APP CONTAINER -->
+    <div id="mainApp" class="flex-1 flex flex-col justify-between hidden">
+
+        <!-- TOP HEADER BAR -->
+        <header class="bg-cardBg px-4 py-3.5 border-b border-duskBlue/40 flex items-center justify-between sticky top-0 z-30 shadow-xs">
+            <div class="flex items-center gap-2.5">
+                <div class="w-10 h-10 bg-lavender/80 rounded-2xl flex items-center justify-center text-purple-900 font-bold">
+                    <i data-lucide="shield-check" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <!-- Multi-Band Switcher Dropdown -->
+                    <select id="profileSwitcher" onchange="switchProfile(this.value)" class="text-xs font-bold text-gray-800 bg-duskBlue/30 px-2 py-1 rounded-xl border border-duskBlue focus:outline-none">
+                        <option value="Maya" selected>Maya's Band (Active)</option>
+                        <option value="Alex">Alex's Band</option>
+                    </select>
+                    <div class="flex items-center gap-1.5 mt-0.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span id="signalStateText" class="text-[10px] text-gray-500 font-medium">Cellular Mesh Ranging Active</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Actions: Battery & Ring Band -->
+            <div class="flex items-center gap-2">
+                <div class="flex items-center gap-1 bg-gray-50 px-2 py-1.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-700">
+                    <i data-lucide="battery-charging" class="w-4 h-4 text-emerald-600"></i>
+                    <span id="batteryPercent">88%</span>
+                </div>
+                <button onclick="ringBand()" class="bg-rose-100 hover:bg-rose-200 text-rose-900 px-3 py-2 rounded-2xl font-bold flex items-center gap-1 text-xs transition touch-target shadow-xs" title="Ring Band Remotely">
+                    <i data-lucide="bell-ring" class="w-4 h-4 animate-bounce"></i>
+                    <span>Ring Band</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- MAIN VIEW CONTAINERS -->
+        <main class="flex-1 overflow-y-auto p-4 space-y-4 pb-20">
+
+            <!-- PAGE 1: DASHBOARD VIEW -->
+            <div id="pageDashboard" class="space-y-4">
+                
+                <!-- Long-Range Radar Banner Summary -->
+                <section class="bg-cardBg rounded-3xl p-4 border border-duskBlue/60 shadow-xs flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2.5 bg-duskBlue/60 rounded-2xl text-blue-900">
+                            <i data-lucide="radar" class="w-6 h-6 animate-spin" style="animation-duration: 8s;"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-xs font-bold uppercase tracking-wider text-gray-400">Remote Ranging Status</h2>
+                            <p id="dashLocationText" class="text-sm font-bold text-gray-800">Habitat School Ajman • 1.4 km</p>
+                        </div>
+                    </div>
+                    <button onclick="switchTab('radar')" class="text-xs font-bold text-purple-900 bg-lavender/60 px-3 py-2 rounded-xl hover:bg-lavender transition">
+                        View Map →
+                    </button>
+                </section>
+
+                <!-- AI Cycle & Prediction Card -->
+                <section class="bg-cardBg rounded-3xl p-5 border border-duskBlue/60 shadow-xs space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <div class="p-2 bg-lavender rounded-xl text-purple-900">
+                                <i data-lucide="sparkles" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-sm font-bold text-gray-800">AI Menstrual & Discomfort Forecast</h2>
+                                <p class="text-xs text-gray-500">Next Period Date: <strong class="text-purple-900">Nov 22, 2026 (92% confidence)</strong></p>
+                            </div>
+                        </div>
+                        <span class="text-[10px] bg-purple-100 text-purple-900 font-bold px-2.5 py-1 rounded-full">Luteal Phase</span>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-cream p-3.5 rounded-2xl border border-duskBlue/40">
+                            <span class="text-xs text-gray-500 font-medium">Cycle Stage</span>
+                            <div class="text-base font-bold text-gray-800 mt-0.5">Luteal (Day 21)</div>
+                            <span class="text-[10px] text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md inline-block mt-2">Sensory Shift Expected</span>
+                        </div>
+                        <div class="bg-cream p-3.5 rounded-2xl border border-duskBlue/40">
+                            <span class="text-xs text-gray-500 font-medium">PMDD / Pain Risk</span>
+                            <div class="text-base font-bold text-rose-800 mt-0.5">Moderate-High</div>
+                            <span class="text-[10px] text-gray-600 inline-block mt-2">Overnight HRV dip flagged</span>
+                        </div>
+                    </div>
+
+                    <!-- Guardian Validation Prompt -->
+                    <div class="bg-lavender/30 rounded-2xl p-4 border border-lavender space-y-3">
+                        <div class="flex items-start gap-2.5">
+                            <i data-lucide="message-square-heart" class="w-5 h-5 text-purple-800 mt-0.5 shrink-0"></i>
+                            <div>
+                                <h3 class="text-xs font-bold text-purple-900">Guardian Observation Check</h3>
+                                <p class="text-xs text-gray-700 mt-0.5">"Does this match your child's sensory and behavioral experience today?"</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 pt-1">
+                            <button onclick="submitValidation('Yes, matches')" class="py-2.5 bg-white hover:bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs font-semibold transition touch-target">
+                                ✓ Yes, matches
+                            </button>
+                            <button onclick="submitValidation('Partially')" class="py-2.5 bg-white hover:bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs font-semibold transition touch-target">
+                                ~ Partially
+                            </button>
+                            <button onclick="submitValidation('Different / Tweak')" class="py-2.5 bg-white hover:bg-rose-50 border border-rose-200 text-rose-900 rounded-xl text-xs font-semibold transition touch-target">
+                                ✗ Needs Tuning
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Quick Biometric Summary Grid -->
+                <section class="space-y-3">
+                    <div class="flex items-center justify-between px-1">
+                        <h2 class="text-xs font-bold uppercase tracking-wider text-gray-500">Live Biometrics Overview</h2>
+                        <button onclick="switchTab('analytics')" class="text-xs text-purple-900 font-bold hover:underline">View Detailed Graphs →</button>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-cardBg p-4 rounded-2xl border border-duskBlue/50 space-y-1">
+                            <div class="flex items-center justify-between text-gray-500 text-xs">
+                                <span>Core Body Temp</span>
+                                <i data-lucide="thermometer" class="w-4 h-4 text-amber-600"></i>
+                            </div>
+                            <div class="text-xl font-bold text-gray-800">36.85°C</div>
+                            <span class="text-[10px] text-emerald-700 font-semibold">+0.12°C Luteal shift</span>
+                        </div>
+                        <div class="bg-cardBg p-4 rounded-2xl border border-duskBlue/50 space-y-1">
+                            <div class="flex items-center justify-between text-gray-500 text-xs">
+                                <span>EDA Stress Level</span>
+                                <i data-lucide="activity" class="w-4 h-4 text-rose-500"></i>
+                            </div>
+                            <div class="text-xl font-bold text-gray-800">2.4 µS</div>
+                            <span class="text-[10px] text-rose-700 font-semibold">1 Spike at 10:15 AM</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Quick Symptom Logging Drawer -->
+                <section class="bg-cardBg rounded-3xl p-5 border border-duskBlue/60 shadow-xs space-y-4">
+                    <div class="flex items-center gap-2">
+                        <div class="p-2 bg-sage rounded-xl text-slate-800">
+                            <i data-lucide="clipboard-pen" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-sm font-bold text-gray-800">Guardian Symptom Quick-Log</h2>
+                            <p class="text-xs text-gray-500">Tap icons to record non-verbal observations</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="block text-xs font-semibold text-gray-600">Blood Flow Observation</label>
+                        <div class="grid grid-cols-4 gap-2">
+                            <button onclick="selectFlow('Spotting')" id="flowSpotting" class="py-2.5 px-1.5 bg-cream hover:bg-duskBlue/50 border border-duskBlue rounded-2xl text-xs font-semibold text-gray-700 transition touch-target text-center">
+                                💧 Spotting
+                            </button>
+                            <button onclick="selectFlow('Light')" id="flowLight" class="py-2.5 px-1.5 bg-cream hover:bg-duskBlue/50 border border-duskBlue rounded-2xl text-xs font-semibold text-gray-700 transition touch-target text-center">
+                                🩸 Light
+                            </button>
+                            <button onclick="selectFlow('Medium')" id="flowMedium" class="py-2.5 px-1.5 bg-cream hover:bg-duskBlue/50 border border-duskBlue rounded-2xl text-xs font-semibold text-gray-700 transition touch-target text-center">
+                                🌊 Medium
+                            </button>
+                            <button onclick="selectFlow('Heavy')" id="flowHeavy" class="py-2.5 px-1.5 bg-cream hover:bg-duskBlue/50 border border-duskBlue rounded-2xl text-xs font-semibold text-gray-700 transition touch-target text-center">
+                                🚨 Heavy
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="block text-xs font-semibold text-gray-600">Behavioral & Sensory Indicators</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="toggleLogTag(this)" class="p-2.5 bg-cream hover:bg-purple-50 border border-duskBlue rounded-2xl text-xs font-medium text-gray-700 transition touch-target">
+                                🧠 Head Pressure
+                            </button>
+                            <button onclick="toggleLogTag(this)" class="p-2.5 bg-cream hover:bg-purple-50 border border-duskBlue rounded-2xl text-xs font-medium text-gray-700 transition touch-target">
+                                ⚡ Sensory Overload
+                            </button>
+                            <button onclick="toggleLogTag(this)" class="p-2.5 bg-cream hover:bg-purple-50 border border-duskBlue rounded-2xl text-xs font-medium text-gray-700 transition touch-target">
+                                🩹 Abdominal Pain
+                            </button>
+                        </div>
+                    </div>
+
+                    <button onclick="saveGuardianLog()" class="w-full py-3 bg-slate-800 text-white font-semibold rounded-2xl hover:bg-slate-700 transition flex items-center justify-center gap-2 touch-target shadow-xs">
+                        <i data-lucide="save" class="w-4 h-4"></i> Save Observation Log
+                    </button>
+                </section>
+            </div>
+
+            <!-- PAGE 2: BAND RADAR & MAP TRACKING VIEW -->
+            <div id="pageRadar" class="space-y-4 hidden">
+                <section class="bg-cardBg rounded-3xl p-5 border border-duskBlue/60 shadow-xs space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-base font-bold text-gray-800">Long-Range Smart Band Ranging</h2>
+                            <p class="text-xs text-gray-500">Dual BLE Mesh & Cellular GPS Geofence</p>
+                        </div>
+                        <span class="text-xs font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full">Connected</span>
+                    </div>
+
+                    <!-- Leaflet Interactive Map Container -->
+                    <div id="leafletMap" class="shadow-inner border border-gray-200"></div>
+
+                    <div class="bg-cream p-4 rounded-2xl border border-duskBlue/50 space-y-3 text-xs">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Current Geo-Zone:</span>
+                            <strong class="text-gray-800" id="radarZoneText">Habitat School Ajman</strong>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Distance from Guardian:</span>
+                            <strong class="text-purple-900" id="radarDistText">1.4 km away</strong>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">Signal Method:</span>
+                            <strong class="text-emerald-700">GPS + LoRa Cellular Mesh</strong>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="ringBand()" class="py-3 bg-rose-100 hover:bg-rose-200 text-rose-900 font-bold rounded-2xl transition flex items-center justify-center gap-1.5 touch-target">
+                            <i data-lucide="bell-ring" class="w-4 h-4"></i> Remote Acoustic Ping
+                        </button>
+                        <button onclick="openMapDirections()" class="py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-2xl transition flex items-center justify-center gap-1.5 touch-target">
+                            <i data-lucide="navigation" class="w-4 h-4"></i> Open Navigation
+                        </button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- PAGE 3: AI ANALYTICS & DETAILED BIOMETRIC GRAPHS VIEW -->
+            <div id="pageAnalytics" class="space-y-4 hidden">
+                <section class="bg-cardBg rounded-3xl p-5 border border-duskBlue/60 shadow-xs space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-base font-bold text-gray-800">Biometric & Sensory Analysis</h2>
+                            <p class="text-xs text-gray-500">Understand thermal shifts, HRV & EDA spikes</p>
+                        </div>
+                        
+                        <!-- DAY / WEEK TOGGLE -->
+                        <div class="flex bg-duskBlue/40 p-1 rounded-xl text-xs font-semibold">
+                            <button onclick="setGraphTimeframe('day')" id="btnTimeframeDay" class="px-3 py-1.5 rounded-lg bg-white shadow-xs text-purple-950 font-bold">Day</button>
+                            <button onclick="setGraphTimeframe('week')" id="btnTimeframeWeek" class="px-3 py-1.5 rounded-lg text-gray-600 hover:text-gray-900">Week</button>
+                        </div>
+                    </div>
+
+                    <!-- GRAPH 1: Core Body Temperature (CBT) -->
+                    <div class="space-y-2 border-b border-gray-100 pb-4">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                                <i data-lucide="thermometer" class="w-4 h-4 text-amber-600"></i> Core Body Temperature (CBT)
+                            </span>
+                            <span class="text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md font-semibold">Luteal Thermal Shift (+0.12°C)</span>
+                        </div>
+                        <div class="h-44 w-full">
+                            <canvas id="cbtChartCanvas"></canvas>
+                        </div>
+                        <p class="text-[11px] text-gray-500 leading-snug">
+                            <strong>Guardian Insight:</strong> Follicular phase baseline averages ~36.45°C. A sustained jump above 36.75°C confirms luteal phase ovulation shift.
+                        </p>
+                    </div>
+
+                    <!-- GRAPH 2: Electrodermal Activity (EDA Sensory Spikes) -->
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                                <i data-lucide="activity" class="w-4 h-4 text-rose-500"></i> EDA Sensory Overload Spikes (µS)
+                            </span>
+                            <span class="text-[11px] text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md font-semibold">Sympathetic Stress</span>
+                        </div>
+                        <div class="h-44 w-full">
+                            <canvas id="edaChartCanvas"></canvas>
+                        </div>
+                        <p class="text-[11px] text-gray-500 leading-snug">
+                            <strong>Guardian Insight:</strong> Peaks above 2.0 µS signal heightened sensory stress or physical discomfort even before verbal expression.
+                        </p>
+                    </div>
+                </section>
+            </div>
+
+            <!-- PAGE 4: CHILD PROFILE & GUARDIAN SETTINGS VIEW -->
+            <div id="pageSettings" class="space-y-4 hidden">
+                <section class="bg-cardBg rounded-3xl p-5 border border-duskBlue/60 shadow-xs space-y-4">
+                    <h2 class="text-base font-bold text-gray-800">Child & Band Settings</h2>
+
+                    <div class="space-y-3">
+                        <div class="bg-cream p-4 rounded-2xl border border-duskBlue/40 space-y-2">
+                            <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Active Profile</span>
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="font-bold text-gray-800" id="profileNameDisplay">Maya</span>
+                                <span class="text-xs bg-purple-100 text-purple-900 px-2.5 py-1 rounded-full font-semibold">Blood Group: O+</span>
+                            </div>
+                            <div class="text-xs text-gray-600">Home: <span id="profileHomeDisplay">Al Jurf, Ajman</span></div>
+                            <div class="text-xs text-gray-600">School: <span id="profileSchoolDisplay">Habitat School Ajman</span></div>
+                        </div>
+
+                        <!-- Accessibility Toggles -->
+                        <div class="bg-cream p-4 rounded-2xl border border-duskBlue/40 space-y-3">
+                            <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Guardian Accessibility Settings</span>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <div class="text-xs font-bold text-gray-800">Atkinson Hyperlegible Font</div>
+                                    <div class="text-[11px] text-gray-500">Enhanced text clarity toggle</div>
+                                </div>
+                                <button onclick="toggleAccessibleFont()" id="fontToggleBtn" class="w-12 h-6 bg-gray-300 rounded-full p-1 transition duration-200">
+                                    <div id="fontToggleDot" class="w-4 h-4 bg-white rounded-full shadow-md transform transition"></div>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Re-run Onboarding / Edit Details -->
+                        <button onclick="reopenOnboarding()" class="w-full py-3 bg-duskBlue/50 hover:bg-duskBlue text-blue-950 font-bold rounded-2xl transition flex items-center justify-center gap-2 touch-target">
+                            <i data-lucide="edit-3" class="w-4 h-4"></i> Edit Child Profile & UAE Locations
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Clinician Export Card -->
+                <section class="bg-gradient-to-br from-lavender/40 to-duskBlue/40 rounded-3xl p-5 border border-purple-200 shadow-xs space-y-3">
+                    <div class="flex items-center gap-2">
+                        <div class="p-2 bg-white rounded-xl text-purple-900 shadow-xs">
+                            <i data-lucide="file-text" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-sm font-bold text-purple-950">Clinician PDF Export</h2>
+                            <p class="text-xs text-gray-600">Structured summary for gynecological visits</p>
+                        </div>
+                    </div>
+                    <button onclick="generateClinicianPDF()" class="w-full py-3.5 bg-white hover:bg-purple-50 text-purple-950 font-bold border border-purple-300 rounded-2xl transition flex items-center justify-center gap-2 touch-target shadow-xs">
+                        <i data-lucide="download" class="w-4 h-4"></i> Download Medical Summary PDF
+                    </button>
+                </section>
+            </div>
+
+        </main>
+
+        <!-- BOTTOM NAVIGATION / TAB BAR -->
+        <nav class="bg-cardBg border-t border-duskBlue/40 px-4 py-3 flex items-center justify-around sticky bottom-0 z-30 shadow-lg">
+            <button onclick="switchTab('dashboard')" id="navDashboard" class="flex flex-col items-center gap-1 text-purple-900 touch-target">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+                <span class="text-[10px] font-bold">Dashboard</span>
+            </button>
+            <button onclick="switchTab('radar')" id="navRadar" class="flex flex-col items-center gap-1 text-gray-400 hover:text-purple-900 touch-target">
+                <i data-lucide="radar" class="w-5 h-5"></i>
+                <span class="text-[10px] font-semibold">Band Radar</span>
+            </button>
+            <button onclick="switchTab('analytics')" id="navAnalytics" class="flex flex-col items-center gap-1 text-gray-400 hover:text-purple-900 touch-target">
+                <i data-lucide="line-chart" class="w-5 h-5"></i>
+                <span class="text-[10px] font-semibold">AI Analytics</span>
+            </button>
+            <button onclick="switchTab('settings')" id="navSettings" class="flex flex-col items-center gap-1 text-gray-400 hover:text-purple-900 touch-target">
+                <i data-lucide="settings" class="w-5 h-5"></i>
+                <span class="text-[10px] font-semibold">Settings</span>
+            </button>
+        </nav>
+
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // Global State & Data Models
+        let cbtChart = null;
+        let edaChart = null;
+        let leafletMapInstance = null;
+        let activeTimeframe = 'day';
+
+        const uaeNeighborhoods = {
+            "Ajman": ["Al Jurf", "Al Nuaimia", "Al Rashidiya", "Al Rawda", "Al Mowaihat", "Al Hamidiya"],
+            "Sharjah": ["Al Nud", "Muwaileh", "Al Majaz", "Abu Shagara", "Al Taawun", "Al Nahda"],
+            "Dubai": ["Downtown Dubai", "Jumeirah", "Al Barsha", "Deira", "Bur Dubai", "Dubai Marina"],
+            "Abu Dhabi": ["Al Reem Island", "Al Khalidiya", "Al Bateen", "MBZ City"],
+            "Ras Al Khaimah": ["Al Nakheel", "Al Dhait", "Mina Al Arab"],
+            "Fujairah": ["Al Faseel", "Mirbah", "City Center"],
+            "Umm Al Quwain": ["Al Salamah", "Al Ramla", "Old Town"]
+        };
+
+        const chartDatasets = {
+            day: {
+                labels: ['06:00', '09:00', '12:00', '15:00', '18:00', '21:00', '00:00'],
+                cbt: [36.42, 36.50, 36.65, 36.82, 36.85, 36.78, 36.60],
+                eda: [0.8, 1.1, 2.4, 1.5, 0.9, 1.2, 0.6]
+            },
+            week: {
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                cbt: [36.38, 36.42, 36.45, 36.75, 36.82, 36.85, 36.80],
+                eda: [0.9, 1.2, 1.0, 2.1, 2.5, 1.8, 1.1]
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            updateNeighborhoods();
+        });
+
+        function updateNeighborhoods() {
+            const citySelect = document.getElementById('homeCity');
+            const neighborhoodSelect = document.getElementById('homeNeighborhood');
+            if(!citySelect || !neighborhoodSelect) return;
+            const selectedCity = citySelect.value;
+            
+            neighborhoodSelect.innerHTML = '';
+            if (uaeNeighborhoods[selectedCity]) {
+                uaeNeighborhoods[selectedCity].forEach(n => {
+                    const opt = document.createElement('option');
+                    opt.value = n;
+                    opt.textContent = n;
+                    neighborhoodSelect.appendChild(opt);
+                });
+            }
+        }
+
+        // Modal Utility
+        function showModal(title, message) {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalMessage').textContent = message;
+            document.getElementById('customModal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function closeModal() {
+            document.getElementById('customModal').classList.add('hidden');
+        }
+
+        // Onboarding Navigation
+        function simulateBluetoothPairing() {
+            const spinner = document.getElementById('pairingSpinner');
+            const btIcon = document.getElementById('bluetoothIcon');
+            const statusText = document.getElementById('pairingStatusText');
+            const pairBtn = document.getElementById('pairBtn');
+
+            spinner.classList.remove('hidden');
+            btIcon.classList.add('hidden');
+            statusText.textContent = "Scanning BLE & Handshaking LoRaWAN Mesh...";
+            pairBtn.disabled = true;
+
+            setTimeout(() => {
+                spinner.classList.add('hidden');
+                btIcon.classList.remove('hidden');
+                btIcon.classList.add('text-emerald-600');
+                statusText.innerHTML = "<strong class='text-emerald-700'>NutriBand Pro Connected!</strong> (Signal: -62dBm)";
+                pairBtn.innerHTML = '<i data-lucide="check" class="w-5 h-5"></i> Band Paired';
+                pairBtn.classList.remove('bg-slate-800', 'hover:bg-slate-700');
+                pairBtn.classList.add('bg-emerald-700', 'text-white');
+                lucide.createIcons();
+
+                setTimeout(() => { goToStep(2); }, 900);
+            }, 1500);
+        }
+
+        function goToStep(stepNumber) {
+            document.getElementById('step1').classList.add('hidden');
+            document.getElementById('step2').classList.add('hidden');
+            document.getElementById('step3').classList.add('hidden');
+            document.getElementById(`step${stepNumber}`).classList.remove('hidden');
+        }
+
+        function completeOnboarding() {
+            const name = document.getElementById('childNameInput').value || "Maya";
+            const city = document.getElementById('homeCity').value;
+            const neighborhood = document.getElementById('homeNeighborhood').value;
+            const school = document.getElementById('schoolSelect').value;
+
+            // Update UI displays
+            document.getElementById('profileSwitcher').options[0].text = `${name}'s Band (Active)`;
+            document.getElementById('profileNameDisplay').textContent = name;
+            document.getElementById('profileHomeDisplay').textContent = `${neighborhood}, ${city}`;
+            document.getElementById('profileSchoolDisplay').textContent = school;
+            document.getElementById('dashLocationText').textContent = `${school} • 1.4 km`;
+            document.getElementById('radarZoneText').textContent = school;
+
+            document.getElementById('onboardingScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+
+            initBiometricCharts();
+            initLeafletMap();
+            showModal("Setup Complete", `NutriMind is now active for ${name}. Long-range band telemetry and AI forecasting are running.`);
+        }
+
+        function reopenOnboarding() {
+            document.getElementById('mainApp').classList.add('hidden');
+            document.getElementById('onboardingScreen').classList.remove('hidden');
+            goToStep(1);
+        }
+
+        // NAVIGATION TABS CONTROLLER (Dashboard, Radar, Analytics, Settings)
+        function switchTab(tabName) {
+            const tabs = ['dashboard', 'radar', 'analytics', 'settings'];
+            
+            tabs.forEach(t => {
+                const pageEl = document.getElementById(`page${t.charAt(0).toUpperCase() + t.slice(1)}`);
+                const navBtn = document.getElementById(`nav${t.charAt(0).toUpperCase() + t.slice(1)}`);
+                
+                if(pageEl) pageEl.classList.add('hidden');
+                if(navBtn) {
+                    navBtn.classList.remove('text-purple-900');
+                    navBtn.classList.add('text-gray-400');
+                }
+            });
+
+            const activePage = document.getElementById(`page${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
+            const activeNav = document.getElementById(`nav${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
+
+            if(activePage) activePage.classList.remove('hidden');
+            if(activeNav) {
+                activeNav.classList.remove('text-gray-400');
+                activeNav.classList.add('text-purple-900');
+            }
+
+            if(tabName === 'radar' && leafletMapInstance) {
+                setTimeout(() => { leafletMapInstance.invalidateSize(); }, 200);
+            }
+        }
+
+        // CHART.JS BIOMETRIC INITIALIZATION & TIMEFRAME TOGGLE
+        function initBiometricCharts() {
+            const cbtCtx = document.getElementById('cbtChartCanvas').getContext('2d');
+            const edaCtx = document.getElementById('edaChartCanvas').getContext('2d');
+
+            if(cbtChart) cbtChart.destroy();
+            if(edaChart) edaChart.destroy();
+
+            // CBT Chart (Temperature)
+            cbtChart = new Chart(cbtCtx, {
+                type: 'line',
+                data: {
+                    labels: chartDatasets[activeTimeframe].labels,
+                    datasets: [{
+                        label: 'Core Body Temp (°C)',
+                        data: chartDatasets[activeTimeframe].cbt,
+                        borderColor: '#D97706',
+                        backgroundColor: 'rgba(217, 119, 6, 0.1)',
+                        borderWidth: 2.5,
+                        fill: true,
+                        tension: 0.35,
+                        pointBackgroundColor: '#D97706',
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: {
+                            min: 36.0,
+                            max: 37.2,
+                            ticks: { callback: v => v + '°C' }
+                        }
+                    }
+                }
+            });
+
+            // EDA Chart (Stress Spikes)
+            edaChart = new Chart(edaCtx, {
+                type: 'bar',
+                data: {
+                    labels: chartDatasets[activeTimeframe].labels,
+                    datasets: [{
+                        label: 'EDA Conductance (µS)',
+                        data: chartDatasets[activeTimeframe].eda,
+                        backgroundColor: chartDatasets[activeTimeframe].eda.map(val => val > 2.0 ? 'rgba(225, 29, 72, 0.8)' : 'rgba(157, 129, 137, 0.5)'),
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 3.5,
+                            ticks: { callback: v => v + ' µS' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function setGraphTimeframe(mode) {
+            activeTimeframe = mode;
+            const dayBtn = document.getElementById('btnTimeframeDay');
+            const weekBtn = document.getElementById('btnTimeframeWeek');
+
+            if(mode === 'day') {
+                dayBtn.className = "px-3 py-1.5 rounded-lg bg-white shadow-xs text-purple-950 font-bold";
+                weekBtn.className = "px-3 py-1.5 rounded-lg text-gray-600 hover:text-gray-900";
+            } else {
+                weekBtn.className = "px-3 py-1.5 rounded-lg bg-white shadow-xs text-purple-950 font-bold";
+                dayBtn.className = "px-3 py-1.5 rounded-lg text-gray-600 hover:text-gray-900";
+            }
+
+            if(cbtChart && edaChart) {
+                cbtChart.data.labels = chartDatasets[mode].labels;
+                cbtChart.data.datasets[0].data = chartDatasets[mode].cbt;
+                cbtChart.update();
+
+                edaChart.data.labels = chartDatasets[mode].labels;
+                edaChart.data.datasets[0].data = chartDatasets[mode].eda;
+                edaChart.data.datasets[0].backgroundColor = chartDatasets[mode].eda.map(val => val > 2.0 ? 'rgba(225, 29, 72, 0.8)' : 'rgba(157, 129, 137, 0.5)');
+                edaChart.update();
+            }
+        }
+
+        // LEAFLET MAP RANGING INITIALIZATION (Ajman, UAE Coordinates)
+        function initLeafletMap() {
+            if(leafletMapInstance) return;
+
+            // Center on Ajman, UAE (Habitat School / Al Jurf area)
+            const bandLat = 25.4052;
+            const bandLng = 55.5136;
+
+            leafletMapInstance = L.map('leafletMap').setView([bandLat, bandLng], 14);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 18,
+                attribution: '© OpenStreetMap'
+            }).addTo(leafletMapInstance);
+
+            const bandMarker = L.marker([bandLat, bandLng]).addTo(leafletMapInstance);
+            bandMarker.bindPopup("<b>Maya's Band</b><br>Habitat School Ajman").openPopup();
+
+            L.circle([bandLat, bandLng], {
+                color: '#84A98C',
+                fillColor: '#D8E2DC',
+                fillOpacity: 0.3,
+                radius: 400
+            }).addTo(leafletMapInstance);
+        }
+
+        // GUARDIAN ACTIONS
+        function ringBand() {
+            showModal("Remote Acoustic & Vibration Ping", "Signal transmitted via LoRaWAN Cellular Mesh. The band is ringing at full volume even across long distance.");
+        }
+
+        function openMapDirections() {
+            showModal("Google Maps Route", "Opening live turn-by-turn directions from your location to Habitat School Ajman.");
+        }
+
+        function submitValidation(type) {
+            showModal("Observation Logged", `Recorded guardian validation: "${type}". This refines the AI PMDD & sensory model for your child.`);
+        }
+
+        let selectedFlowState = "Medium";
+        function selectFlow(intensity) {
+            ['Spotting', 'Light', 'Medium', 'Heavy'].forEach(f => {
+                const btn = document.getElementById(`flow${f}`);
+                if(btn) btn.classList.remove('bg-purple-200', 'border-purple-600');
+            });
+            const activeBtn = document.getElementById(`flow${intensity}`);
+            if(activeBtn) activeBtn.classList.add('bg-purple-200', 'border-purple-600');
+            selectedFlowState = intensity;
+        }
+
+        function toggleLogTag(btn) {
+            btn.classList.toggle('bg-purple-100');
+            btn.classList.toggle('border-purple-400');
+        }
+
+        function saveGuardianLog() {
+            showModal("Observation Saved", `Flow intensity (${selectedFlowState}) and sensory observation tags saved successfully.`);
+        }
+
+        function generateClinicianPDF() {
+            showModal("Downloading PDF Report", "Medical report compiled with PCOS baseline shifts, PMDD overload timelines, and PPG metrics.");
+        }
+
+        function switchProfile(profileName) {
+            showModal("Profile Switched", `Now viewing connected band telemetry for ${profileName}.`);
+        }
+
+        function toggleAccessibleFont() {
+            const body = document.getElementById('appBody');
+            const dot = document.getElementById('fontToggleDot');
+            const btn = document.getElementById('fontToggleBtn');
+
+            body.classList.toggle('font-accessible-mode');
+            if(body.classList.contains('font-accessible-mode')) {
+                btn.classList.remove('bg-gray-300');
+                btn.classList.add('bg-purple-800');
+                dot.classList.add('translate-x-6');
+            } else {
+                btn.classList.remove('bg-purple-800');
+                btn.classList.add('bg-gray-300');
+                dot.classList.remove('translate-x-6');
+            }
+        }
+    </script>
+</body>
+</html>
