@@ -872,7 +872,15 @@
         }
 
         function generateClinicianPDF() {
-            showModal("Downloading PDF Report", "Medical report compiled with PCOS baseline shifts, PMDD overload timelines, and PPG metrics.");
+            // Create an anchor element to trigger download of gmu.pdf
+            const link = document.createElement('a');
+            link.href = 'gmu.pdf';
+            link.download = 'gmu.pdf';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showModal("Downloading PDF Report", "Medical report 'gmu.pdf' compiled with PCOS baseline shifts, PMDD overload timelines, and PPG metrics has been downloaded.");
         }
 
         function switchProfile(profileName) {
