@@ -872,15 +872,15 @@
         }
 
         function generateClinicianPDF() {
-            // Create an anchor element to trigger download of gmu.pdf
+            // Create an anchor element to trigger download of PDF/gmu.pdf
             const link = document.createElement('a');
-            link.href = 'gmu.pdf';
+            link.href = 'PDF/gmu.pdf';
             link.download = 'gmu.pdf';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
 
-            showModal("Downloading PDF Report", "Medical report 'gmu.pdf' compiled with PCOS baseline shifts, PMDD overload timelines, and PPG metrics has been downloaded.");
+            showModal("Downloading PDF Report", "Medical report 'gmu.pdf' compiled with PCOS baseline shifts, PMDD overload timelines, and PPG metrics has been downloaded from the PDF folder.");
         }
 
         function switchProfile(profileName) {
